@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPC Tool | Instructions</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans">
+
+
+    <nav class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <span class="font-bold text-xl text-blue-600"><i class="fas fa-chart-line mr-2"></i>SPC Tool</span>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="/" class="border-transparent text-gray-500 hover:border-blue-300 hover:text-blue-600 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition">Home</a>
+                        <a href="/instructions" class="border-blue-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Instructions</a>
+                        {% if session.get('full_params') %}
+                        <a href="/reanalyze" class="border-transparent text-gray-500 hover:border-blue-300 hover:text-blue-600 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition">Reanalyze</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 mt-10">
+        <div class="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-100">
+            <div class="px-6 py-8 border-b border-gray-200 bg-gradient-to-r from-blue-700 to-cyan-600">
+                <h1 class="text-3xl font-bold text-white">How to use this tool</h1>
+                <p class="mt-2 text-blue-50">A guide to simulating and analyzing statistical process control charts.</p>
+            </div>
+            
+            <div class="p-8 space-y-10">
+                
+                <section>
+                    <h2 class="text-xl font-bold text-blue-700 mb-3">1. Select Data Source</h2>
+                    <div class="text-gray-600 space-y-2">
+                        <p>TrendWatch offers two distinct ways to generate analysis, depending on your needs:</p>
+                        <ul class="list-disc pl-5 space-y-2 mt-2">
+                            <li>
+                                <strong class="text-gray-900">Simulation (Generated Data):</strong> 
+                                <span class="block text-sm mt-1">Select "Simulation" to have the tool automatically generate random numbers based on statistical parameters. This is ideal for theoretical testing where you want to see how a chart reacts to specific distributions (Normal, Lognormal) without needing an external file.</span>
+                            </li>
+                            <li>
+                                <strong class="text-gray-900">Real-World Data (CSV Upload):</strong> 
+                                <span class="block text-sm mt-1">Select "Upload CSV" to import your own facility's historical data. The tool will calculate the baseline (mean and standard deviation) directly from your file, allowing you to validate methods against actual records.</span>
+                            </li>
+                        </ul>
+                    </div>
+                </section>
+
+
+                <hr class="border-gray-100">
+
+
+                <section>
+                    <h2 class="text-xl font-bold text-blue-700 mb-3">2. Define Behavior (Simulation Only)</h2>
+                    <div class="text-gray-600 space-y-2">
+                        <p>If you chose <strong>Simulation</strong>, you must define how the data behaves before any anomalies occur:</p>
+                        <ul class="list-disc pl-5 space-y-1 mt-2">
+                            <li><strong class="text-gray-900">Stable:</strong> Data fluctuates around a constant mean (Normal or Lognormal distribution).</li>
+                            <li><strong class="text-gray-900">Trending:</strong> Data steadily increases or decreases over time (Linear).</li>
+                            <li><strong class="text-gray-900">Periodic:</strong> Data follows a sinusoidal wave pattern.</li>
+                        </ul>
+                    </div>
+                </section>
+
+
+                <hr class="border-gray-100">
+
+
+                <section>
+                    <h2 class="text-xl font-bold text-blue-700 mb-3">3. Induce Changes</h2>
+                    <div class="text-gray-600 space-y-2">
+                        <p>Force the process to go "Out of Control" on a specific day to test detection speed:</p>
+                        <ul class="list-disc pl-5 space-y-1 mt-2">
+                            <li><strong class="text-gray-900">Step Change:</strong> A sudden instantaneous jump. (e.g., Factor 1.2 = 20% increase).</li>
+                            <li><strong class="text-gray-900">Trending Change:</strong> A gradual drift that starts on the change day.</li>
+                            <li><strong class="text-gray-900">Amplitude Change:</strong> (Periodic only) The wave height increases/decreases.</li>
+                            <li><strong class="text-gray-900">Period Change:</strong> (Periodic only) The cycle frequency speeds up or slows down.</li>
+                        </ul>
+                    </div>
+                </section>
+
+
+                <hr class="border-gray-100">
+
+
+                <section>
+                    <h2 class="text-xl font-bold text-blue-700 mb-3">4. Analysis Methods</h2>
+                    <div class="text-gray-600 space-y-2">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <strong class="text-gray-900 block mb-1">Shewhart</strong>
+                                <span class="text-sm">Standard 3-sigma limits. Best for large, sudden spikes.</span>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <strong class="text-gray-900 block mb-1">EWMA</strong>
+                                <span class="text-sm">Exponentially Weighted Moving Average. Best for small, subtle shifts.</span>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <strong class="text-gray-900 block mb-1">CUSUM</strong>
+                                <span class="text-sm">Cumulative Sum. Extremely sensitive to small deviations from target.</span>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <strong class="text-gray-900 block mb-1">Farrington / GLM</strong>
+                                <span class="text-sm">Advanced algorithms for surveillance data.</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+
+                <hr class="border-gray-100">
+
+
+                <section>
+                    <h2 class="text-xl font-bold text-blue-700 mb-3">5. Compare & Finalize</h2>
+                    <div class="text-gray-600 space-y-2">
+                        <ul class="list-disc pl-5 space-y-1 mt-2">
+                            <li><strong class="text-gray-900">Reanalyze:</strong> After a run, click "Reanalyze" in the top menu to test a different method (e.g., switching from Shewhart to CUSUM) on the <em>exact same dataset</em>.</li>
+                            <li><strong class="text-gray-900">Finalize & Rank:</strong> Click the "Finalize" button to generate a performance table. This ranks your runs by <strong>Average Run Length (ARL)</strong>—a lower ARL means the method detected the outbreak faster.</li>
+                        </ul>
+                    </div>
+                </section>
+
+
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
+
+
+
