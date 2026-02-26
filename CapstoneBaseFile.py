@@ -702,8 +702,8 @@ def clear():
     session.pop('full_params', None)  
     return redirect(url_for('index'))
 
-@app.route("/reanalyze", methods=["GET", "POST"])
-def reanalyze():
+@app.route("/analysis", methods=["GET", "POST"])
+def analysis():
     # 1. Check if session has data. If not, return to home with ERROR.
     if 'full_params' not in session or not previous_results:
         return render_template("home.html", 
