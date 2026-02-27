@@ -19,7 +19,68 @@ app = Flask(__name__)
 app.secret_key = "your_secret_key_here"
 
 # In-memory job store: { job_id: { "status": "running"/"done"/"error", "result": ... } }
-jobs = {}
+import json
+import os
+import tempfile
+
+# Directory to store job files
+JOB_DIR = tempfile.gettempdir()
+
+def save_job(job_id, data):
+    path = os.path.join(JOB_DIR, f"job_{job_id}.json")
+    with open(path, 'w') as f:
+        json.dump(data, f)
+
+def load_job(job_id):
+    path = os.path.join(JOB_DIR, f"job_{job_id}.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, 'r') as f:
+        return json.load(f)
+
+def delete_job(job_id):
+    path = os.path.join(JOB_DIR, f"job_{job_id}.json")
+    if os.path.exists(path):
+        os.remove(path)
+
+
+def run_job_in_background(job_id, sim_kwargs):
+    try:
+        save_job(job_id, {"status": "running"})
+        kwargs = {k: v for k, v in sim_kwargs.items() if not k.startswith('_')}
+        img, arl_value, chart_title, extra_stats = run_simulation(**kwargs)
+        save_job(job_id, {
+            "status": "done",
+            "result": {
+                "image": img,
+                "title": chart_title,
+                "arl": round(arl_value, 2),
+                "rl_percentiles": extra_stats.get("rl_percentiles"),
+                "detect_within_threshold_count": extra_stats.get("detections_within_x"),
+                "detect_within_threshold_percent": extra_stats.get("percent_within_x"),
+                "late_threshold": extra_stats.get("x_days")
+            },
+            "full_params": sim_kwargs.get("_full_params")
+        })
+    except Exception as e:
+        save_job(job_id, {"status": "error", "message": str(e)})
+
+
+@app.route("/poll/<job_id>")
+def poll(job_id):
+    global previous_results
+    job = load_job(job_id)
+    if job is None:
+        return jsonify({"status": "error", "message": "Job not found"})
+    if job["status"] == "running":
+        return jsonify({"status": "running"})
+    if job["status"] == "error":
+        return jsonify({"status": "error", "message": job.get("message", "Unknown error")})
+    if job["status"] == "done":
+        result = job["result"]
+        previous_results.append(result)
+        delete_job(job_id)
+        return jsonify({"status": "done"})
 
 # ─────────────────────────────────────────────
 # All your existing simulation functions below
