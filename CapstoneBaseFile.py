@@ -537,7 +537,9 @@ def run_simulation(behavior, params, n_baseline, change, change_day, analysis_me
 
 def run_job_in_background(job_id, sim_kwargs):
     try:
-        img, arl_value, chart_title, extra_stats = run_simulation(**sim_kwargs)
+        # Remove internal keys before passing to run_simulation
+        kwargs = {k: v for k, v in sim_kwargs.items() if not k.startswith('_')}
+        img, arl_value, chart_title, extra_stats = run_simulation(**kwargs)
         jobs[job_id] = {
             "status": "done",
             "result": {
