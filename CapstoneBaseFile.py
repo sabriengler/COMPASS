@@ -732,25 +732,6 @@ def index():
                            full_params_exists=('full_params' in session))
 
 
-@app.route("/poll/<job_id>")
-def poll(job_id):
-    """Frontend polls this endpoint every 3 seconds to check if the job is done."""
-    global previous_results
-    job = jobs.get(job_id)
-    if job is None:
-        return jsonify({"status": "error", "message": "Job not found"})
-    if job["status"] == "running":
-        return jsonify({"status": "running"})
-    if job["status"] == "error":
-        return jsonify({"status": "error", "message": job.get("message", "Unknown error")})
-    if job["status"] == "done":
-        result = job["result"]
-        previous_results.append(result)
-        # Clean up job from memory
-        del jobs[job_id]
-        return jsonify({"status": "done"})
-
-
 @app.route("/instructions")
 def instructions():
     return render_template("instructions.html")
