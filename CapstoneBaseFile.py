@@ -127,8 +127,8 @@ def calculate_limits_sim(data, sigma_multiplier, analysis_method="shewhart", lam
            (mean - (sigma_multiplier - 1) * sigma, mean + (sigma_multiplier - 1) * sigma), mean, sigma
 
 
-def apply_change_sim(data, change, change_day, params, original_behavior, baseline_mean, sigma, analysis_method, sigma_multiplier, baseline_period, lambda_val, max_days, alpha_val):
-    max_days = 10000
+def apply_change_sim(data, change, change_day, params, original_behavior, baseline_mean, sigma, analysis_method, sigma_multiplier, baseline_period, lambda_val, max_days, alpha_val):  
+    print("Analysis method:", analysis_method)
     noise_val = params.get('noise', 1.0)
     std = params.get('std', None)
     if original_behavior == 'periodic':
@@ -151,6 +151,7 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
     step_change_done = False
     new_intercept = None
     out_of_control_index = None
+    check_freq = 25
     ewma_current = baseline_mean
 
     while len(data) < max_days:
@@ -209,28 +210,37 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
                 else:
                     new_value = np.random.normal(loc=start + slope * idx, scale=noise_val)
         data.append(new_value)
-        if len(data) > baseline_period:
+        should_check = (len(data) > baseline_period and (
+            (len(data) - baseline_period) % check_freq == 0 or len(data) == max_days))
+        if should_check:
             if analysis_method == 'shewhart':
                 result = shewhart(data, baseline_mean, sigma, sigma_multiplier, baseline_period)
                 out_of_control_index = result["out_of_control_index"]
+
             elif analysis_method == 'ewma':
                 result = ewma(data, baseline_mean, sigma, sigma_multiplier, lambda_val, baseline_period)
                 out_of_control_index = result["out_of_control_index"]
+
             elif analysis_method == 'mc-ewma':
                 result = mc_ewma(data, baseline_mean, sigma, sigma_multiplier, lambda_val, baseline_period)
                 out_of_control_index = result["out_of_control_index"]
+
             elif analysis_method == 'cusum':
                 result = cusum(data, baseline_mean, sigma, sigma_multiplier, baseline_period)
                 out_of_control_index = result["out_of_control_index"]
+
             elif analysis_method == 'farrington':
                 data_farr = np.clip(np.round(data), 0, None)
-                result = farrington(data_farr, baseline_period, alpha=0.05)
+                result = farrington(data_farr, baseline_period, alpha=alpha_val)
                 out_of_control_index = result["out_of_control_index"]
+
             elif analysis_method == 'glm':
-                result = glm(data, baseline_period, alpha=0.05)
+                result = glm(data, baseline_period, alpha=alpha_val)
                 out_of_control_index = result["out_of_control_index"]
-        if out_of_control_index is not None:
-            break
+
+            if out_of_control_index is not None:
+                data = data[:out_of_control_index + 1]
+                break
     return data, out_of_control_index
 
 
