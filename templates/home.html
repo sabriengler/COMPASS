@@ -381,6 +381,58 @@
             </div>
         </div>
     </div>
-    <script>updateForm(); toggleSource();</script>
+        <script>
+        updateForm();
+        toggleSource();
+
+        const jobId = "{{ pending_job_id | default('') }}";
+
+        if (jobId) {
+            const submitBtn = document.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = "Running...";
+            }
+
+            const container = document.getElementById("results-container");
+            const banner = document.createElement("div");
+            banner.className = "bg-blue-50 border border-blue-200 rounded-xl p-6 text-center text-blue-700 font-medium shadow mb-4";
+            banner.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Running simulation, please wait...`;
+            container.prepend(banner);
+
+            let pollCount = 0;
+            const maxPolls = 300; // 10 minutes max
+
+            const poll = setInterval(() => {
+                pollCount++;
+                if (pollCount > maxPolls) {
+                    clearInterval(poll);
+                    banner.className = "bg-red-50 border border-red-200 rounded-xl p-6 text-center text-red-700 font-medium shadow mb-4";
+                    banner.innerHTML = `<i class="fas fa-exclamation-triangle mr-2"></i> Simulation timed out. Please try again.`;
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Run Simulation"; }
+                    return;
+                }
+
+                fetch(`/poll/${jobId}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === "done") {
+                            clearInterval(poll);
+                            window.location.href = "/";   // GET redirect — no re-submission
+                        } else if (data.status === "error") {
+                            clearInterval(poll);
+                            banner.className = "bg-red-50 border border-red-200 rounded-xl p-6 text-center text-red-700 font-medium shadow mb-4";
+                            banner.innerHTML = `<i class="fas fa-exclamation-triangle mr-2"></i> Error: ${data.message}`;
+                            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Run Simulation"; }
+                        }
+                        // "running" → do nothing, keep polling
+                    })
+                    .catch(() => {
+                        clearInterval(poll);
+                        banner.innerHTML = `<i class="fas fa-exclamation-triangle mr-2"></i> Connection lost. Please refresh.`;
+                    });
+            }, 2000);
+        }
+    </script>
 </body>
 </html>
