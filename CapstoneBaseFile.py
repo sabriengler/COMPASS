@@ -21,7 +21,7 @@ app = Flask(__name__)
 app.secret_key = "your_secret_key_here"
 
 # ─────────────────────────────────────────────
-# File-based job + results store (works across gunicorn workers)
+# File-based job + results store
 # ─────────────────────────────────────────────
 
 JOB_DIR = tempfile.gettempdir()
@@ -61,30 +61,37 @@ def save_results(results):
 
 
 # ─────────────────────────────────────────────
-# Simulation functions
+# Simulation Functions
 # ─────────────────────────────────────────────
 
 def generate_behavior_data_sim(behavior, params, n_baseline):
     x = np.arange(n_baseline)
+    data_type = params.get('data_type', 'continuous')
+
     if behavior == 'stable':
-        dt = params.get('distribution_type', 'normal')
-        if dt == 'normal':
-            data = np.random.normal(loc=params['mean'], scale=params['std'], size=n_baseline)
-        elif dt == 'lognormal':
-            m, s = params['mean'], params['std']
-            std_log = np.sqrt(np.log(1 + (s**2) / (m**2)))
-            mu_log = np.log(m) - 0.5 * std_log**2
-            data = np.random.lognormal(mean=mu_log, sigma=std_log, size=n_baseline)
+        if data_type == 'discrete':
+            data = np.random.poisson(lam=max(params['mean'], 0), size=n_baseline)
         else:
-            raise ValueError("Unsupported distribution type!")
+            data = np.random.normal(loc=params['mean'], scale=params['std'], size=n_baseline)
+
     elif behavior == 'trending':
-        noise = params.get('noise', 1.0)
-        data = params['start'] + params['slope'] * x + np.random.normal(scale=noise, size=n_baseline)
+        if data_type == 'discrete':
+            lam = params['start'] + params['slope'] * x
+            data = np.random.poisson(lam=np.maximum(lam, 0))
+        else:
+            noise = params.get('noise', 1.0)
+            data = params['start'] + params['slope'] * x + np.random.normal(scale=noise, size=n_baseline)
+
     elif behavior == 'periodic':
-        noise = params.get('noise', 1.0)
-        data = params['mean'] + params['amplitude'] * np.sin(2 * np.pi * x / params['period']) + np.random.normal(scale=noise, size=n_baseline)
+        if data_type == 'discrete':
+            lam = params['mean'] + params['amplitude'] * np.sin(2 * np.pi * x / params['period'])
+            data = np.random.poisson(lam=np.maximum(lam, 0))
+        else:
+            noise = params.get('noise', 1.0)
+            data = params['mean'] + params['amplitude'] * np.sin(2 * np.pi * x / params['period']) + np.random.normal(scale=noise, size=n_baseline)
     else:
         raise ValueError("Unsupported behavior type!")
+
     return list(data)
 
 
@@ -106,6 +113,7 @@ def calculate_limits_sim(data, sigma_multiplier, analysis_method="shewhart", lam
 def apply_change_sim(data, change, change_day, params, original_behavior, baseline_mean, sigma,
                      analysis_method, sigma_multiplier, baseline_period, lambda_val, max_days, alpha_val,
                      k_val=None, h_val=None):
+    data_type = params.get('data_type', 'continuous')
     noise_val = params.get('noise', 1.0)
     std = params.get('std', None)
     if original_behavior == 'periodic':
@@ -118,12 +126,13 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
     while len(data) < baseline_period:
         idx = len(data)
         if original_behavior == 'stable':
-            new_value = np.random.normal(loc=baseline_mean, scale=std)
+            new_value = np.random.poisson(lam=max(baseline_mean, 0)) if data_type == 'discrete' else np.random.normal(loc=baseline_mean, scale=std)
         elif original_behavior == 'periodic':
             cycle = idx % period
-            new_value = baseline_mean + amplitude * np.sin(2*np.pi*cycle/period) + np.random.normal(scale=noise_val)
+            lam = baseline_mean + amplitude * np.sin(2*np.pi*cycle/period)
+            new_value = np.random.poisson(lam=max(lam, 0)) if data_type == 'discrete' else baseline_mean + amplitude * np.sin(2*np.pi*cycle/period) + np.random.normal(scale=noise_val)
         elif original_behavior == 'trending':
-            new_value = np.random.normal(loc=start + slope * idx, scale=noise_val)
+            new_value = np.random.poisson(lam=max(start + slope * idx, 0)) if data_type == 'discrete' else np.random.normal(loc=start + slope * idx, scale=noise_val)
         data.append(new_value)
 
     starting_value = None
@@ -138,16 +147,17 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
             if change['type'] == 'step':
                 factor = change.get('factor', 1.0)
                 if original_behavior == 'stable':
-                    new_value = np.random.normal(loc=baseline_mean * factor, scale=std)
+                    new_value = np.random.poisson(lam=max(baseline_mean * factor, 0)) if data_type == 'discrete' else np.random.normal(loc=baseline_mean * factor, scale=std)
                 elif original_behavior == 'periodic':
                     cycle = idx % period
-                    new_value = np.random.normal(loc=baseline_mean * factor, scale=noise_val) + amplitude * np.sin(2*np.pi*cycle/period)
+                    lam = baseline_mean * factor + amplitude * np.sin(2*np.pi*cycle/period)
+                    new_value = np.random.poisson(lam=max(lam, 0)) if data_type == 'discrete' else np.random.normal(loc=baseline_mean * factor, scale=noise_val) + amplitude * np.sin(2*np.pi*cycle/period)
                 elif original_behavior == 'trending':
                     if not step_change_done:
                         window = min(5, len(data))
                         new_intercept = np.mean(data[-window:]) * factor
                         step_change_done = True
-                    new_value = np.random.normal(loc=new_intercept + slope * (idx - start_idx), scale=noise_val)
+                    new_value = np.random.poisson(lam=max(new_intercept + slope * (idx - start_idx), 0)) if data_type == 'discrete' else np.random.normal(loc=new_intercept + slope * (idx - start_idx), scale=noise_val)
             elif change['type'] == 'trending':
                 added_slope = change['slope']
                 duration = change['duration']
@@ -156,31 +166,36 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
                 trend_index = idx - start_idx
                 if trend_index < duration:
                     if original_behavior == 'stable':
-                        new_value = np.random.normal(loc=baseline_mean + added_slope * trend_index, scale=std)
+                        new_value = np.random.poisson(lam=max(baseline_mean + added_slope * trend_index, 0)) if data_type == 'discrete' else np.random.normal(loc=baseline_mean + added_slope * trend_index, scale=std)
                     elif original_behavior == 'periodic':
                         cycle = idx % period
-                        new_value = np.random.normal(loc=baseline_mean + added_slope * trend_index, scale=noise_val) + amplitude * np.sin(2*np.pi*cycle/period)
+                        lam = baseline_mean + added_slope * trend_index + amplitude * np.sin(2*np.pi*cycle/period)
+                        new_value = np.random.poisson(lam=max(lam, 0)) if data_type == 'discrete' else np.random.normal(loc=baseline_mean + added_slope * trend_index, scale=noise_val) + amplitude * np.sin(2*np.pi*cycle/period)
                     elif original_behavior == 'trending':
-                        new_value = np.random.normal(loc=starting_value + added_slope * trend_index, scale=noise_val)
+                        new_value = np.random.poisson(lam=max(starting_value + added_slope * trend_index, 0)) if data_type == 'discrete' else np.random.normal(loc=starting_value + added_slope * trend_index, scale=noise_val)
                 else:
                     if original_behavior == 'stable':
-                        new_value = np.random.normal(loc=baseline_mean + added_slope * duration, scale=std)
+                        new_value = np.random.poisson(lam=max(baseline_mean + added_slope * duration, 0)) if data_type == 'discrete' else np.random.normal(loc=baseline_mean + added_slope * duration, scale=std)
                     elif original_behavior == 'periodic':
                         cycle = idx % period
-                        new_value = np.random.normal(loc=baseline_mean + added_slope * duration, scale=noise_val) + amplitude * np.sin(2*np.pi*cycle/period)
+                        lam = baseline_mean + added_slope * duration + amplitude * np.sin(2*np.pi*cycle/period)
+                        new_value = np.random.poisson(lam=max(lam, 0)) if data_type == 'discrete' else np.random.normal(loc=baseline_mean + added_slope * duration, scale=noise_val) + amplitude * np.sin(2*np.pi*cycle/period)
                     elif original_behavior == 'trending':
-                        new_value = np.random.normal(loc=starting_value + added_slope * duration + slope * (idx - (change_day + duration)), scale=noise_val)
+                        lam = starting_value + added_slope * duration + slope * (idx - (change_day + duration))
+                        new_value = np.random.poisson(lam=max(lam, 0)) if data_type == 'discrete' else np.random.normal(loc=lam, scale=noise_val)
         else:
             if original_behavior == 'stable':
-                new_value = np.random.normal(loc=baseline_mean, scale=std)
+                new_value = np.random.poisson(lam=max(baseline_mean, 0)) if data_type == 'discrete' else np.random.normal(loc=baseline_mean, scale=std)
             elif original_behavior == 'periodic':
                 cycle = idx % period
-                new_value = baseline_mean + amplitude * np.sin(2*np.pi*cycle/period) + np.random.normal(scale=noise_val)
+                lam = baseline_mean + amplitude * np.sin(2*np.pi*cycle/period)
+                new_value = np.random.poisson(lam=max(lam, 0)) if data_type == 'discrete' else baseline_mean + amplitude * np.sin(2*np.pi*cycle/period) + np.random.normal(scale=noise_val)
             elif original_behavior == 'trending':
                 if change and change['type'] == 'step' and step_change_done:
-                    new_value = np.random.normal(loc=new_intercept + slope * (idx - change_day), scale=noise_val)
+                    new_value = np.random.poisson(lam=max(new_intercept + slope * (idx - change_day), 0)) if data_type == 'discrete' else np.random.normal(loc=new_intercept + slope * (idx - change_day), scale=noise_val)
                 else:
-                    new_value = np.random.normal(loc=start + slope * idx, scale=noise_val)
+                    new_value = np.random.poisson(lam=max(start + slope * idx, 0)) if data_type == 'discrete' else np.random.normal(loc=start + slope * idx, scale=noise_val)
+
         data.append(new_value)
 
         if len(data) > baseline_period:
@@ -193,7 +208,7 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
             elif analysis_method == 'cusum':
                 result = cusum(data, baseline_mean, sigma, sigma_multiplier, baseline_period, k_val=k_val, h_val=h_val)
             elif analysis_method == 'farrington':
-                data_farr = np.clip(np.round(data), 0, None)
+                data_farr = np.clip(np.round(data), 0, None).astype(int) if data_type == 'continuous' else np.array(data).astype(int)
                 result = farrington(data_farr, baseline_period, alpha=alpha_val)
             elif analysis_method == 'glm':
                 result = glm(data, baseline_period, alpha=alpha_val)
@@ -208,7 +223,7 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
 def plot_replicates_and_histogram(replications, run_lengths, change_day, analysis_method, sigma_multiplier,
                                   baseline_period, n_replications, arl_value, metric_label, avg_sigma,
                                   avg_change_day, limit_stopped_percentage, lambda_val, ucl_ci, lcl_ci,
-                                  late_threshold, arl_moe, alpha_val, k_val=None, h_val=None):
+                                  late_threshold, arl_moe, alpha_val, k_val=None, h_val=None, data_type='continuous'):
     fig = plt.figure(figsize=(16, 5.5))
     fig.patch.set_facecolor('#f8fafc')
     gs = fig.add_gridspec(nrows=2, ncols=3, width_ratios=[0.8, 1.8, 2.5])
@@ -228,38 +243,45 @@ def plot_replicates_and_histogram(replications, run_lengths, change_day, analysi
         "shewhart": [
             Line2D([0],[0], color="blue", lw=2, label="Simulated Data"),
             Line2D([0],[0], color="green", lw=2, label="Center Line (X̄)"),
-            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Upper/Lower CL"),
-            Line2D([0],[0], color="orange", lw=2, linestyle="dashed", label="Upper/Lower Warning"),
-            Line2D([0],[0], marker="o", color="w", markerfacecolor="red", markersize=10, label="Out-of-Control"),
+            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Upper Threshold (UT)"),
+            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Lower Threshold (LT)"),
+            Line2D([0],[0], color="orange", lw=2, linestyle="dashed", label="Upper Warning"),
+            Line2D([0],[0], color="orange", lw=2, linestyle="dashed", label="Lower Warning"),
+            Line2D([0],[0], marker="o", color="w", markerfacecolor="red", markersize=10, label="Detection Point"),
         ],
         "ewma": [
             Line2D([0],[0], color="blue", lw=2, label="Simulated Data"),
             Line2D([0],[0], color="green", lw=2, label="EWMA"),
-            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Upper/Lower EWMA CL"),
-            Line2D([0],[0], marker="o", color="w", markerfacecolor="red", markersize=10, label="Out-of-Control"),
+            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Upper EWMA UT"),
+            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Lower EWMA LT"),
+            Line2D([0],[0], marker="o", color="w", markerfacecolor="red", markersize=10, label="Detection Point"),
         ],
         "mc-ewma": [
             Line2D([0],[0], color="blue", lw=2, label="Simulated Data"),
             Line2D([0],[0], color="green", lw=2, label="MC-EWMA"),
-            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Upper/Lower MC-EWMA CL"),
-            Line2D([0],[0], marker="o", color="w", markerfacecolor="red", markersize=10, label="Out-of-Control"),
+            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Upper MC-EWMA UT"),
+            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Lower MC-EWMA LT"),
+            Line2D([0],[0], marker="o", color="w", markerfacecolor="red", markersize=10, label="Detection Point"),
         ],
         "cusum": [
             Line2D([0],[0], color="blue", lw=2, label="Simulated Data"),
             Line2D([0],[0], color="green", lw=2, label="CUSUM+"),
             Line2D([0],[0], color="orange", lw=2, label="CUSUM-"),
             Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="+h / -h"),
-            Line2D([0],[0], marker="o", color="w", markerfacecolor="red", markersize=10, label="Out-of-Control"),
+            Line2D([0],[0], marker="o", color="w", markerfacecolor="red", markersize=10, label="Detection Point"),
         ],
         "farrington": [
-            Line2D([0],[0], color="blue", lw=2, label="Simulated Data"),
-            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Upper Farrington CL"),
-            Line2D([0],[0], marker="o", color="w", markerfacecolor="red", markersize=10, label="Out-of-Control"),
+            Line2D([0],[0], color="blue", lw=2, label="Observed Counts"),
+            Line2D([0],[0], color="green", lw=2, label="Expected"),
+            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Upper Farrington UT"),
+            Line2D([0],[0], marker="o", color="w", markerfacecolor="red", markersize=10, label="Detection Point"),
         ],
         "glm": [
-            Line2D([0],[0], color="blue", lw=2, label="Simulated Data"),
-            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Upper/Lower GLM CL"),
-            Line2D([0],[0], marker="o", color="w", markerfacecolor="red", markersize=10, label="Out-of-Control"),
+            Line2D([0],[0], color="blue", lw=2, label="Observed Data"),
+            Line2D([0],[0], color="green", lw=2, label="Expected"),
+            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Upper GLM UT"),
+            Line2D([0],[0], color="red", lw=2, linestyle="dashed", label="Lower GLM LT"),
+            Line2D([0],[0], marker="o", color="w", markerfacecolor="red", markersize=10, label="Detection Point"),
         ],
     }
     handles = handle_map.get(analysis_method, [])
@@ -316,14 +338,17 @@ def plot_replicates_and_histogram(replications, run_lengths, change_day, analysi
                     marker_value = c_plus[out_idx] if c_plus[out_idx] > abs(c_minus[out_idx]) else c_minus[out_idx]
                     ax.scatter(out_idx, marker_value, color="red", s=100, zorder=3)
             elif analysis_method == "farrington":
-                result = farrington(data, baseline_period, alpha=alpha_val)
-                ax.plot(result["series"], color="green", zorder=2)
+                data_farr = np.clip(np.round(data), 0, None).astype(int) if data_type == 'continuous' else np.array(data).astype(int)
+                result = farrington(data_farr, baseline_period, alpha=alpha_val)
+                ax.plot(result["series"], color="blue", zorder=2)
+                ax.plot(result["expected"], color="green", linestyle="solid", zorder=2)
                 ax.plot(result["ucl"], color="red", linestyle="dashed", zorder=2)
                 if result["out_of_control_index"] is not None:
                     ax.scatter(result["out_of_control_index"], result["series"][result["out_of_control_index"]], color="red", s=100, zorder=3)
             elif analysis_method == "glm":
                 result = glm(data, baseline_period, alpha=alpha_val)
-                ax.plot(result["series"], color="green", zorder=2)
+                ax.plot(result["series"], color="blue", zorder=2)
+                ax.plot(result["expected"], color="green", linestyle="solid", zorder=2)
                 ax.plot(result["ucl"], color="red", linestyle="dashed", zorder=2)
                 ax.plot(result["lcl"], color="red", linestyle="dashed", zorder=2)
                 if result["out_of_control_index"] is not None:
@@ -354,7 +379,8 @@ def plot_replicates_and_histogram(replications, run_lengths, change_day, analysi
         "arl_moe": float(arl_moe),
         "ucl_ci": [float(ucl_ci[0]), float(ucl_ci[1])],
         "lcl_ci": [float(lcl_ci[0]), float(lcl_ci[1])],
-        "limit_pct": float(limit_stopped_percentage)
+        "limit_pct": float(limit_stopped_percentage),
+        "fpr_value": None
     }
 
 
@@ -382,7 +408,7 @@ def run_simulation(behavior, params, n_baseline, change, change_day, analysis_me
             elif analysis_method == 'cusum':
                 res = cusum(data, baseline_mean, sigma, sigma_multiplier, n_baseline, k_val=k_val, h_val=h_val)
             elif analysis_method == 'farrington':
-                data_farr = np.clip(np.round(data), 0, None)
+                data_farr = np.clip(np.round(data), 0, None).astype(int)
                 res = farrington(data_farr, n_baseline, alpha=alpha_val)
             elif analysis_method == 'glm':
                 res = glm(data, n_baseline, alpha=alpha_val)
@@ -402,7 +428,13 @@ def run_simulation(behavior, params, n_baseline, change, change_day, analysis_me
             change_days.append(change_day)
 
     arl_value = np.mean(run_lengths) if run_lengths else float('inf')
-    arl_moe = 0.0
+
+    fpr_value = None
+    if change is None:
+        false_positives = sum(1 for r in replications if r[1] is not None)
+        fpr_value = false_positives / iterations if iterations > 0 else None
+
+    arl_moe = 0.0  # fix: always defined
     if len(run_lengths) > 1:
         arl_std = np.std(run_lengths, ddof=1)
         arl_moe = 1.96 * (arl_std / np.sqrt(iterations))
@@ -431,12 +463,14 @@ def run_simulation(behavior, params, n_baseline, change, change_day, analysis_me
     else:
         chart_title = analysis_method.upper()
 
+    data_type = params.get('data_type', 'continuous')
     buf = io.BytesIO()
     extra_stats = plot_replicates_and_histogram(
         replications, run_lengths, change_day, analysis_method, sigma_multiplier,
         baseline_period, iterations, arl_value, metric_label, avg_sigma, avg_change_day,
         limit_pct, lambda_val, ucl_ci, lcl_ci, late_threshold, arl_moe, alpha_val,
-        k_val=k_val, h_val=h_val)
+        k_val=k_val, h_val=h_val, data_type=data_type)
+    extra_stats["fpr_value"] = fpr_value
     plt.savefig(buf, format="png", dpi=80)
     buf.seek(0)
     img_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
@@ -445,24 +479,23 @@ def run_simulation(behavior, params, n_baseline, change, change_day, analysis_me
 
 
 # ─────────────────────────────────────────────
-# Background job runner — ONE definition only
+# Background job runner
 # ─────────────────────────────────────────────
 
 def run_job_in_background(job_id, sim_kwargs):
     try:
         save_job(job_id, {"status": "running"})
         kwargs = {k: v for k, v in sim_kwargs.items() if not k.startswith('_')}
+        results_list = kwargs.pop("_results_list", [])
         img, arl_value, chart_title, extra_stats = run_simulation(**kwargs)
-        save_job(job_id, {
-            "status": "done",
-            "result": {
-                "image": img,
-                "title": chart_title,
-                "arl": round(arl_value, 2),
-                "extra_stats": extra_stats
-            },
-            "full_params": sim_kwargs.get("_full_params")
-        })
+        result_entry = {
+            "image": img,
+            "title": chart_title,
+            "arl": round(arl_value, 2),
+            "extra_stats": extra_stats,
+            "inputs": sim_kwargs.get("_inputs")
+        }
+        save_job(job_id, {"status": "done", "result": result_entry})
     except Exception as e:
         save_job(job_id, {"status": "error", "message": str(e)})
 
@@ -504,11 +537,11 @@ def index():
 
         try:
             n_baseline = int(fd.get("n_baseline", "50"))
-            n_replications = min(int(fd.get("n_replications", "25")), 100)
+            n_replications = min(int(fd.get("n_replications", "25")), 100)  # capped for performance
             sigma_multiplier = float(fd.get("sigma_multiplier", "3.0"))
             late_threshold = float(fd.get("late_threshold", 120))
         except ValueError:
-            n_baseline, n_replications, sigma_multiplier, late_threshold = 50, 100, 3.0, 120
+            n_baseline, n_replications, sigma_multiplier, late_threshold = 50, 25, 3.0, 120
 
         if data_source == "upload":
             file = request.files.get('csv_file')
@@ -520,12 +553,18 @@ def index():
                 if len(raw_values) < 10:
                     raise ValueError("Dataset too small (<10 points).")
                 behavior = "stable"
-                params = {"mean": float(np.mean(raw_values)), "std": float(np.std(raw_values)), "distribution_type": "normal"}
+                params = {
+                    "mean": float(np.mean(raw_values)),
+                    "std": float(np.std(raw_values)),
+                    "data_type": fd.get("data_type", "continuous"),
+                    "distribution_type": fd.get("dist_type", "normal")
+                }
             except Exception as e:
                 return render_template("home.html", error=f"Invalid File: {str(e)}", results=load_results())
         else:
             behavior = fd.get("behavior")
             params = {}
+            params['data_type'] = fd.get("data_type", "continuous")
             if behavior == "stable":
                 params['mean'] = float(fd.get("mean", "100"))
                 params['std'] = float(fd.get("std", "10"))
@@ -549,7 +588,6 @@ def index():
         else:
             change, change_day = None, None
 
-        analysis_method = fd.get("analysis_method")
         max_days = 10000
         lambda_val = float(fd.get("lambda_val", "0.3")) if fd.get("lambda_val") else 0.3
         alpha_val = float(fd.get("alpha_val", "0.05")) if fd.get("alpha_val") else 0.05
@@ -565,22 +603,40 @@ def index():
         }
         session['full_params'] = full_params
 
-        job_id = str(uuid.uuid4())
-        sim_kwargs = {
-            "behavior": behavior, "params": params, "n_baseline": n_baseline,
-            "change": change, "change_day": change_day, "analysis_method": analysis_method,
-            "n_replications": n_replications, "sigma_multiplier": sigma_multiplier,
-            "max_days": max_days, "lambda_val": lambda_val,
-            "late_threshold": late_threshold, "alpha_val": alpha_val,
-            "custom_data": custom_data, "k_val": k_val, "h_val": h_val,
-            "_full_params": full_params
+        inputs = {
+            "n_replications": n_replications,
+            "change_induced": "Yes" if induce else "No",
+            "behavior": behavior.capitalize(),
+            "data_type": params.get('data_type', 'continuous').capitalize(),
+            "dist_type": params.get('distribution_type', 'N/A').capitalize() if behavior == 'stable' else 'N/A',
+            "mean": params.get('mean', 'N/A'),
+            "std": params.get('std', 'N/A')
         }
-        t = threading.Thread(target=run_job_in_background, args=(job_id, sim_kwargs), daemon=True)
-        t.start()
+
+        # Support running up to 2 methods at once
+        methods_to_run = [fd.get("analysis_method_1", fd.get("analysis_method", "shewhart"))]
+        if fd.get("analysis_method_2") and fd.get("analysis_method_2") != "none":
+            methods_to_run.append(fd.get("analysis_method_2"))
+
+        last_job_id = None
+        for method in methods_to_run:
+            job_id = str(uuid.uuid4())
+            last_job_id = job_id
+            sim_kwargs = {
+                "behavior": behavior, "params": params, "n_baseline": n_baseline,
+                "change": change, "change_day": change_day, "analysis_method": method,
+                "n_replications": n_replications, "sigma_multiplier": sigma_multiplier,
+                "max_days": max_days, "lambda_val": lambda_val,
+                "late_threshold": late_threshold, "alpha_val": alpha_val,
+                "custom_data": custom_data, "k_val": k_val, "h_val": h_val,
+                "_inputs": inputs
+            }
+            t = threading.Thread(target=run_job_in_background, args=(job_id, sim_kwargs), daemon=True)
+            t.start()
 
         return render_template("home.html", results=load_results(),
                                full_params_exists=('full_params' in session),
-                               pending_job_id=job_id)
+                               pending_job_id=last_job_id)
 
     return render_template("home.html", results=load_results(),
                            full_params_exists=('full_params' in session))
@@ -609,21 +665,33 @@ def reanalyze():
         analysis_method = request.form.get("analysis_method")
         lambda_val = float(request.form.get("lambda_val", 0.3)) if analysis_method in ["ewma", "mc-ewma"] else 0.3
         sigma_multiplier = float(request.form.get("sigma_multiplier_re") or fp["sigma_multiplier"])
+        n_replications = min(int(request.form.get("n_replications_re") or fp["n_replications"]), 100)
+        n_baseline = int(request.form.get("n_baseline_re") or fp["n_baseline"])
         k_val = float(request.form.get("k_val")) if request.form.get("k_val") else fp.get("k_val")
         h_val = float(request.form.get("h_val")) if request.form.get("h_val") else fp.get("h_val")
         alpha_val = float(request.form.get("alpha_val", 0.05)) if request.form.get("alpha_val") else fp.get("alpha_val", 0.05)
 
+        inputs = {
+            "n_replications": n_replications,
+            "change_induced": "Yes" if fp["change"] else "No",
+            "behavior": fp["behavior"].capitalize(),
+            "data_type": fp["params"].get('data_type', 'continuous').capitalize(),
+            "dist_type": fp["params"].get('distribution_type', 'N/A').capitalize() if fp["behavior"] == 'stable' else 'N/A',
+            "mean": fp["params"].get('mean', 'N/A'),
+            "std": fp["params"].get('std', 'N/A')
+        }
+
         job_id = str(uuid.uuid4())
         sim_kwargs = {
-            "behavior": fp["behavior"], "params": fp["params"], "n_baseline": fp["n_baseline"],
+            "behavior": fp["behavior"], "params": fp["params"], "n_baseline": n_baseline,
             "change": fp["change"], "change_day": fp["change_day"],
             "analysis_method": analysis_method,
-            "n_replications": fp["n_replications"], "sigma_multiplier": sigma_multiplier,
+            "n_replications": n_replications, "sigma_multiplier": sigma_multiplier,
             "max_days": fp["max_days"], "lambda_val": lambda_val,
             "late_threshold": fp.get("late_threshold", 120),
             "alpha_val": alpha_val, "custom_data": None,
             "k_val": k_val, "h_val": h_val,
-            "_full_params": fp
+            "_inputs": inputs
         }
         t = threading.Thread(target=run_job_in_background, args=(job_id, sim_kwargs), daemon=True)
         t.start()
@@ -639,8 +707,13 @@ def reanalyze():
 def finalize():
     results = load_results()
     valid_results = [r for r in results if r.get('arl') is not None]
-    ranked_data = sorted(valid_results, key=lambda x: x['arl'])
-    return render_template("home.html", results=results, rankings=ranked_data)
+    change_results = [r for r in valid_results if r.get('inputs', {}).get('change_induced') == 'Yes']
+    no_change_results = [r for r in valid_results if r.get('inputs', {}).get('change_induced') == 'No']
+    rankings_change = sorted(change_results, key=lambda x: x['arl'])
+    rankings_no_change = sorted(no_change_results, key=lambda x: x['arl'], reverse=True)
+    return render_template("home.html", results=results,
+                           rankings_change=rankings_change,
+                           rankings_no_change=rankings_no_change)
 
 
 if __name__ == "__main__":
