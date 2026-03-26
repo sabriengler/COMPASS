@@ -137,7 +137,8 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
         if change and idx >= (change_day if change_day is not None else baseline_period):
             start_idx = change_day if change_day is not None else baseline_period
             if change['type'] == 'step':
-                factor = change.get('factor')
+                percent_change = change.get('factor')
+                factor = 1 + (percent_change/100)
                 if factor is None:
                     factor = 1.0
                 if original_behavior == 'stable':
@@ -498,9 +499,9 @@ def plot_replicates_and_histogram(replications, run_lengths, change_day, analysi
                     data_farr = np.clip(np.round(data), 0, None).astype(int)
                 else:
                     data_farr = np.array(data).astype(int)
-                    
                 result = farrington(data_farr, baseline_period, alpha=alpha_val)
-                ax.plot(result["series"], color="green", zorder=2)
+                ax.plot(result["series"], color="blue", zorder=2, label="Observed Counts")
+                ax.plot(result["expected"], color="green", zorder=2, label="Expected")
                 ax.plot(result["ucl"], color="red", linestyle="dashed", zorder=2)
                 ax.plot(result["lcl"], color="red", linestyle="dashed", zorder=2)
                 if result["out_of_control_index"] is not None:
@@ -958,6 +959,8 @@ def operating_curve():
         # 2. Grab user inputs from the OC form
         start_factor = float(request.form.get("start_factor", 1.0))
         end_factor = float(request.form.get("end_factor", 2.0))
+        start_factor = 1 + (start_factor/100)
+        end_factor = 1 + (start_factor/100)
         increments = int(request.form.get("increments", 10))
         mean = float(request.form.get("mean", 100))
         std = float(request.form.get("std", 1.0))
@@ -1036,3 +1039,4 @@ if __name__ == "__main__":
 
 if __name__ == "__main__":
     app.run(debug=True)
+
