@@ -23,8 +23,7 @@ import pandas as pd
 print ("pands imported")
 from scipy.optimize import minimize_scalar
 print ("scalar imported")
-﻿
-app = Flask(__name__)
+﻿app = Flask(__name__)
 print("app created")
 app.secret_key = "your_secret_key_here"  # Replace with a secure key in production
 nav_bar = """
