@@ -1,20 +1,32 @@
+
 from flask import Flask, render_template, request, redirect, url_for, session 
+print ("Flask imported")
 from statsmethods import shewhart, ewma, mc_ewma, cusum, farrington, glm
+print ("statsmodel imported")
 import numpy as np
+print ("numpy imported")
 import matplotlib
+print ("matplot imported")
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+print ("pyplot imported")
 import io
 import base64
+print ("base64 imported")
 import matplotlib.gridspec as gridspec
 from matplotlib.lines import Line2D
+print ("lines imported")
 from scipy.stats import norm
+print ("norm imported")
 import psutil
+print ("psutil imported")
 import pandas as pd
+print ("pands imported")
 from scipy.optimize import minimize_scalar
-
-
+print ("scalar imported")
+﻿
 app = Flask(__name__)
+print("app created")
 app.secret_key = "your_secret_key_here"  # Replace with a secure key in production
 nav_bar = """
 <nav>
@@ -26,18 +38,15 @@ nav_bar = """
 <hr>
 """
 previous_results = []  # Global list to store previous chart results
-
-
+﻿
 # ---------------------------
 # Simulation Functions (including optimize_lambda)
 # ---------------------------
-
-
+﻿
 def generate_behavior_data_sim(behavior, params, n_baseline):
     x = np.arange(n_baseline)
     data_type = params.get('data_type', 'continuous')
-
-
+﻿
     if behavior == 'stable':
         if data_type == 'continuous':
             data = np.random.normal(loc=params['mean'], scale=params['std'], size=n_baseline)
@@ -45,8 +54,7 @@ def generate_behavior_data_sim(behavior, params, n_baseline):
             data = np.random.poisson(lam=max(params['mean'], 0), size=n_baseline)
         else:
             raise ValueError("Unsupported data type!")
-
-
+﻿
     elif behavior == 'trending':
         if data_type == 'continuous':
             noise = params.get('noise', 1.0)
@@ -56,8 +64,7 @@ def generate_behavior_data_sim(behavior, params, n_baseline):
             data = np.random.poisson(lam=np.maximum(lam, 0))
         else:
             raise ValueError("Unsupported data type!")
-
-
+﻿
     elif behavior == 'periodic':
         if data_type == 'continuous':
             noise = params.get('noise', 1.0)
@@ -67,12 +74,10 @@ def generate_behavior_data_sim(behavior, params, n_baseline):
             data = np.random.poisson(lam=np.maximum(lam, 0))
         else:
             raise ValueError("Unsupported data type!")
-
-
+﻿
     else:
         raise ValueError("Unsupported behavior type!")
-
-
+﻿
     return list(data)
 def calculate_limits_sim(data, sigma_multiplier, analysis_method="shewhart", lambda_val=0.3):
     mean = np.mean(data)
@@ -87,8 +92,7 @@ def calculate_limits_sim(data, sigma_multiplier, analysis_method="shewhart", lam
     sigma = MR_bar / 1.128
     return (mean - sigma_multiplier * sigma, mean + sigma_multiplier * sigma), \
            (mean - (sigma_multiplier - 1) * sigma, mean + (sigma_multiplier - 1) * sigma), mean, sigma
-
-
+﻿
 def apply_change_sim(data, change, change_day, params, original_behavior, baseline_mean, sigma, analysis_method, sigma_multiplier, baseline_period, lambda_val, max_days, alpha_val, k_val=None, h_val=None):  
     print("Analysis method:", analysis_method)
     data_type = params.get('data_type', 'continuous')
@@ -126,12 +130,11 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
     new_intercept = None
     out_of_control_index = None
     if analysis_method in ["farrington","glm"]: 
-        check_freq = 100
+        check_freq = 1
     else:
-        check_freq = 25
+        check_freq = 1
     ewma_current = baseline_mean
-
-
+﻿
     while len(data) < max_days:
         idx = len(data)
         if change and idx >= (change_day if change_day is not None else baseline_period):
@@ -162,8 +165,7 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
                         new_value = np.random.poisson(lam=max(new_intercept + slope * (idx - start_idx), 0))
                     else:
                         new_value = np.random.normal(loc=new_intercept + slope * (idx - start_idx), scale=noise_val)
-
-
+﻿
             elif change['type'] == 'trending':
                 added_slope = change['slope']
                 duration = change['duration']
@@ -172,11 +174,9 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
                         starting_value = data[change_day - 1]
                     else:
                         starting_value = start + slope * (start_idx - 1)
-
-
+﻿
                 trend_index = idx - start_idx
-
-
+﻿
                 if trend_index < duration:
                     if original_behavior == 'stable':
                         if data_type == 'discrete':
@@ -241,8 +241,7 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
                         new_value = np.random.poisson(lam=max(lam, 0))
                     else:
                         new_value = np.random.normal(loc=start + slope * idx, scale=noise_val)
-
-
+﻿
         data.append(new_value)
         should_check = (len(data) > baseline_period and (
             (len(data) - baseline_period) % check_freq == 0 or len(data) == max_days))
@@ -250,23 +249,19 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
             if analysis_method == 'shewhart':
                 result = shewhart(data, baseline_mean, sigma, sigma_multiplier, baseline_period)
                 out_of_control_index = result["out_of_control_index"]
-
-
+﻿
             elif analysis_method == 'ewma':
                 result = ewma(data, baseline_mean, sigma, sigma_multiplier, lambda_val, baseline_period)
                 out_of_control_index = result["out_of_control_index"]
-
-
+﻿
             elif analysis_method == 'mc-ewma':
                 result = mc_ewma(data, baseline_mean, sigma, sigma_multiplier, lambda_val, baseline_period)
                 out_of_control_index = result["out_of_control_index"]
-
-
+﻿
             elif analysis_method == 'cusum':
                 result = cusum(data, baseline_mean, sigma, sigma_multiplier, baseline_period, k_val=k_val, h_val=h_val)
                 out_of_control_index = result["out_of_control_index"]
-
-
+﻿
             elif analysis_method == 'farrington':
                 if data_type == 'continuous':
                     data_farr = np.clip(np.round(data), 0, None).astype(int)
@@ -275,13 +270,11 @@ def apply_change_sim(data, change, change_day, params, original_behavior, baseli
                 
                 result = farrington(data_farr, baseline_period, alpha=alpha_val)
                 out_of_control_index = result["out_of_control_index"]
-
-
+﻿
             elif analysis_method == 'glm':
                 result = glm(data, baseline_period, alpha=alpha_val)
                 out_of_control_index = result["out_of_control_index"]
-
-
+﻿
             if out_of_control_index is not None:
                 data = data[:out_of_control_index + 1]
                 break
@@ -359,8 +352,7 @@ def analyze_data_sim(data, control_limits, warning_limits, baseline_mean, sigma,
         plt.scatter(out_of_control_index, marker_value, color="red", s=100, zorder=3, label=f"Out-of-Control (RL: {run_length})")
     plt.legend()
     plt.tight_layout()
-
-
+﻿
 def plot_replicates_and_histogram(replications, run_lengths, change_day, analysis_method, sigma_multiplier, baseline_period, n_replications,
                                   arl_value, metric_label, avg_sigma, avg_change_day, limit_stopped_percentage, lambda_val,
                                   ucl_ci, lcl_ci, late_threshold, arl_moe, alpha_val, k_val=None, h_val=None, data_type='continuous'):
@@ -372,16 +364,13 @@ def plot_replicates_and_histogram(replications, run_lengths, change_day, analysi
     # Legend in Column 0
     legend_ax = fig.add_subplot(gs[:, 0])
     legend_ax.axis("off")
-
-
+﻿
     run_arr = np.array(run_lengths)
-
-
+﻿
     # Percentiles of run length
     rl_percentiles = np.percentile(run_arr, [10, 25, 50, 75, 90])
     p10, p25, p50, p75, p90 = rl_percentiles
-
-
+﻿
     # Detection within X days
     x = float(late_threshold) if late_threshold is not None else None
     detections_within_x = np.sum(run_arr <= x) if x is not None else 0
@@ -457,8 +446,7 @@ def plot_replicates_and_histogram(replications, run_lengths, change_day, analysi
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
             data, out_idx, _, _, baseline_mean, sigma = replications[idx]
-
-
+﻿
             if change_day is not None:
                 ax.axvline(change_day, color="purple", linestyle="dotted", zorder=2)
             rl = (replications[idx][1] - baseline_period + 1) if replications[idx][1] is not None else "∞"
@@ -547,8 +535,7 @@ def plot_replicates_and_histogram(replications, run_lengths, change_day, analysi
     if x is not None:
         hist_ax.axvline(x, color="#ef4444", linestyle="--", linewidth=2.5, label=f"Threshold ({x:.0f} days)", zorder=3)
         hist_ax.legend(loc="upper right")
-
-
+﻿
     plt.tight_layout()
     return {
         "rl_percentiles": {
@@ -568,15 +555,13 @@ def plot_replicates_and_histogram(replications, run_lengths, change_day, analysi
         "fpr_value": None
     }
     
-
-
+﻿
 def run_simulation(behavior, params, n_baseline, change, change_day, analysis_method, n_replications, sigma_multiplier, max_days, lambda_val, late_threshold, alpha_val, custom_data=None, k_val=None, h_val=None):
     run_lengths = []
     replications = []
     sigmas = []
     change_days = []
-
-
+﻿
     # Ensure iterations is always n_replications
     iterations = n_replications
     
@@ -586,8 +571,7 @@ def run_simulation(behavior, params, n_baseline, change, change_day, analysis_me
         baseline_period = n_baseline
     else:
         baseline_period = change_day if (change and change_day is not None) else n_baseline
-
-
+﻿
     for _ in range(iterations):
         # 1. Get Data
         if custom_data is not None:
@@ -624,8 +608,7 @@ def run_simulation(behavior, params, n_baseline, change, change_day, analysis_me
             _, _, baseline_mean, sigma = calculate_limits_sim(data, sigma_multiplier, analysis_method, lambda_val)
             data, out_idx = apply_change_sim(data, change, change_day, params, behavior, baseline_mean, sigma, 
                                              analysis_method, sigma_multiplier, baseline_period, lambda_val, max_days, alpha_val,k_val=k_val, h_val=h_val)
-
-
+﻿
         sigmas.append(sigma)
         
         if out_idx is not None:
@@ -637,8 +620,7 @@ def run_simulation(behavior, params, n_baseline, change, change_day, analysis_me
         replications.append((data, out_idx, None, None, baseline_mean, sigma))
         if change_day is not None:
             change_days.append(change_day)
-
-
+﻿
     arl_value = np.mean(run_lengths) if run_lengths else float('inf')
     fpr_value = None
     if change is None:
@@ -658,17 +640,14 @@ def run_simulation(behavior, params, n_baseline, change, change_day, analysis_me
     
     ucl_ci = (np.percentile(ucl_list, 2.5), np.percentile(ucl_list, 97.5)) if ucl_list else (0, 0)
     lcl_ci = (np.percentile(lcl_list, 2.5), np.percentile(lcl_list, 97.5)) if lcl_list else (0, 0)
-
-
+﻿
     avg_sigma = np.mean(sigmas) if sigmas else 0
     avg_change_day = np.mean(change_days) if change_days else None
     limit_pct = (sum(1 for r in replications if r[1] is None) / iterations) * 100
     metric_label = "FAR" if change is None else "ARL"
-
-
+﻿
     formatted_lambda = format(lambda_val, '.3f').rstrip('0').rstrip('.')
-
-
+﻿
     if analysis_method == "shewhart":
         chart_title = f"Shewhart Chart ({sigma_multiplier}σ)"
     elif analysis_method == "ewma":
@@ -679,10 +658,13 @@ def run_simulation(behavior, params, n_baseline, change, change_day, analysis_me
         k_display = k_val * sigma  if k_val is not None else 0.5 * avg_sigma
         h_display = h_val * sigma if h_val is not None else sigma_multiplier * avg_sigma
         chart_title = f"CUSUM Chart (k={k_display:.3f}, h={h_display:.3f})" 
+    elif analysis_method == "glm":
+        chart_title = f"GLM (α = {alpha_val})"
+    elif analysis_method == "farrington":
+        chart_title = f"Farrington (α = {alpha_val})"
     else:
         chart_title = analysis_method.upper()
-
-
+﻿
     buf = io.BytesIO()
     data_type = params.get('data_type', 'continuous')
     extra_stats = plot_replicates_and_histogram(replications, run_lengths, change_day, analysis_method, sigma_multiplier,
@@ -695,8 +677,7 @@ def run_simulation(behavior, params, n_baseline, change, change_day, analysis_me
     img_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
     plt.close()
     return img_base64, arl_value, chart_title, extra_stats
-
-
+﻿
 def calculate_oc_arl(method, factor, params, behavior, n_baseline, n_replications, sigma_multiplier, max_days, lambda_val, alpha_val, k_val, h_val):
     """Headless simulation loop optimized purely for OC Curve ARL calculation."""
     change = {"type": "step", "factor": factor}
@@ -714,8 +695,7 @@ def calculate_oc_arl(method, factor, params, behavior, n_baseline, n_replication
             run_lengths.append((max_days - n_baseline) + 1)
             
     return np.mean(run_lengths) if run_lengths else float('inf')
-
-
+﻿
 @app.route("/", methods=["GET", "POST"])
 def index():
     global previous_results
@@ -726,8 +706,7 @@ def index():
             session.pop('full_params', None)
             session.pop('last_form_data', None)
             return redirect(url_for('index'))
-
-
+﻿
         fd = request.form.to_dict()
         session['last_form_data'] = fd 
         data_source = fd.get("data_source")
@@ -742,8 +721,7 @@ def index():
         except ValueError:
             n_baseline, n_replications, sigma_multiplier = 50, 100, 3.0
             late_threshold = 120
-
-
+﻿
         # 2. Logic Split: Define Behavior and Params
         if data_source == "upload":
             file = request.files.get('csv_file')
@@ -769,8 +747,7 @@ def index():
                 # CRITICAL: We set custom_data to None so the tool generates 100 NEW replications 
                 # based on your file's stats instead of just plotting the static file once.
                 custom_data = None 
-
-
+﻿
             except Exception as e:
                 return render_template("home.html", error=f"Invalid File: {str(e)}", results=previous_results)
         
@@ -779,8 +756,7 @@ def index():
             behavior = fd.get("behavior")
             params= {}
             params['data_type'] = fd.get("data_type", "continuous")
-
-
+﻿
             if behavior == "stable":
                 params['mean'] = float(fd.get("mean", "100"))
                 params['std'] = float(fd.get("std", "10"))
@@ -805,16 +781,14 @@ def index():
                 change = {"type": "trending", "slope": float(fd.get("change_slope", "0.2")), "duration": int(fd.get("trend_duration", "50"))}
         else:
             change, change_day = None, None
-
-
+﻿
         # 4. Final Parameter Cleanup and Execution
         max_days = change_day + 500 if change_day is not None else 10000
         lambda_val = float(fd.get("lambda_val", "0.3")) if fd.get("lambda_val") else 0.3
         alpha_val = float(fd.get("alpha_val", "0.05")) if fd.get("alpha_val") else 0.05
         k_val = float(fd.get("k_val")) if fd.get("k_val") else None
         h_val = float(fd.get("h_val")) if fd.get("h_val") else None
-
-
+﻿
         session['full_params'] = {
             "behavior": behavior, "params": params, "n_baseline": n_baseline,
             "n_replications": n_replications, "sigma_multiplier": sigma_multiplier,
@@ -825,8 +799,7 @@ def index():
         methods_to_run = [fd.get("analysis_method_1", "shewhart")]
         if fd.get("analysis_method_2") and fd.get("analysis_method_2") != "none":
             methods_to_run.append(fd.get("analysis_method_2"))
-
-
+﻿
         # 6. RUN THE SIMULATION(S)
         for method in methods_to_run:
             img, arl_value, chart_title, extra_stats = run_simulation(
@@ -841,7 +814,14 @@ def index():
                 "data_type": params.get('data_type', 'continuous').capitalize(),
                 "dist_type": params.get('distribution_type', 'N/A').capitalize() if behavior == 'stable' else 'N/A',
                 "mean": params.get('mean', 'N/A'),
-                "std": params.get('std', 'N/A')
+                "std": params.get('std', 'N/A'),
+                "factor": fd.get("factor", "N/A") if fd.get("induce_change", "no").lower() == "yes" else "N/A",
+                "method": method,
+                "lambda_val": lambda_val,
+                "alpha_val": alpha_val,
+                "k_val": k_val,
+                "h_val": h_val,
+                "sigma_multiplier": sigma_multiplier
             }
             previous_results.append({
                 "image": img, 
@@ -850,17 +830,14 @@ def index():
                 "extra_stats": extra_stats,
                 "inputs": inputs
             })
-
-
+﻿
     fd = session.get('last_form_data', {})
     return render_template("home.html", results=previous_results, full_params_exists=('full_params' in session), nav_bar=nav_bar, fd=fd)
-
-
+﻿
 @app.route("/instructions")
 def instructions():
     return render_template("instructions.html", nav_bar=nav_bar)
-
-
+﻿
 @app.route("/clear", methods=["POST"])
 def clear():
     global previous_results
@@ -868,8 +845,7 @@ def clear():
     session.pop('full_params', None)  
     session.pop('last_form_data', None)
     return redirect(url_for('index'))
-
-
+﻿
 @app.route("/reanalyze", methods=["GET", "POST"])
 def reanalyze():
     # 1. Check if session has data. If not, return to home with ERROR.
@@ -881,22 +857,19 @@ def reanalyze():
     if request.method == "POST":
         fp = session['full_params']
         late_threshold = fp.get("late_threshold", 120.0)
-
-
+﻿
         analysis_method = request.form.get("analysis_method")
         lambda_val = 0.3
         
         if analysis_method in ["ewma", "mc-ewma"]:
             lambda_val = float(request.form.get("lambda_val", 0.3))
-
-
+﻿
         sigma_multiplier = float(request.form.get("sigma_multiplier_re") or fp["sigma_multiplier"])
         n_replications = int(request.form.get("n_replications_re") or fp["n_replications"])
         n_baseline = int(request.form.get("n_baseline_re") or fp["n_baseline"])
         k_val = float(request.form.get("k_val")) if request.form.get("k_val") else fp.get("k_val")
         h_val = float(request.form.get("h_val")) if request.form.get("h_val") else fp.get("h_val")
-
-
+﻿
         # Re-run simulation using stored parameters
         img, arl_value, chart_title, extra_stats = run_simulation(
             fp["behavior"], fp["params"], n_baseline, 
@@ -904,6 +877,9 @@ def reanalyze():
             analysis_method, n_replications, sigma_multiplier, 
             fp["max_days"], lambda_val, late_threshold, fp.get("alpha_val", 0.05), custom_data=None, k_val=k_val, h_val=h_val
         )
+        # Grab updated alpha if provided, otherwise fallback to original
+        alpha_val = float(request.form.get("alpha_val", fp.get("alpha_val", 0.05)))
+﻿
         inputs = {
             "n_replications": n_replications,
             "change_induced": "Yes" if fp["change"] else "No",
@@ -911,7 +887,14 @@ def reanalyze():
             "data_type": fp["params"].get('data_type', 'continuous').capitalize(),
             "dist_type": fp["params"].get('distribution_type', 'N/A').capitalize() if fp["behavior"] == 'stable' else 'N/A',
             "mean": fp["params"].get('mean', 'N/A'),
-            "std": fp["params"].get('std', 'N/A')
+            "std": fp["params"].get('std', 'N/A'),
+            "factor": request.form.get("factor", "N/A") if fp.get("change") and fp["change"].get("type") == "step" else "N/A",
+            "method": analysis_method,
+            "lambda_val": lambda_val,
+            "alpha_val": alpha_val,
+            "k_val": k_val,
+            "h_val": h_val,
+            "sigma_multiplier": sigma_multiplier
         }
         previous_results.append({
             "image": img, 
@@ -921,122 +904,97 @@ def reanalyze():
             "inputs": inputs
         })
         return redirect(url_for('index'))
-
-
+﻿
     return render_template("analysis.html")
-
-
+﻿
 @app.route("/operating_curve", methods=["GET", "POST"])
 def operating_curve():
-    # 1. Grab settings from the Home Page session
     fp = session.get('full_params', {})
-    lfd = session.get('last_form_data', {}) # Get the exact form data from home
     
-    # Auto-detect which methods they ran
-    method1 = lfd.get('analysis_method_1', 'shewhart')
-    method2 = lfd.get('analysis_method_2', 'none')
-    
-    auto_methods = [method1]
-    if method2 and method2 != 'none' and method2 not in auto_methods:
-        auto_methods.append(method2)
-
-
+    # Extract every unique configuration from the user's run history
+    unique_configs = []
+    seen_titles = set()
+    for res in previous_results:
+        title = res['title']
+        if title not in seen_titles: # Prevent duplicates if they ran the exact same thing twice
+            seen_titles.add(title)
+            unique_configs.append({
+                'title': title,
+                'method': res['inputs']['method'],
+                'lambda_val': res['inputs']['lambda_val'],
+                'alpha_val': res['inputs'].get('alpha_val', 0.05),
+                'k_val': res['inputs'].get('k_val'),
+                'h_val': res['inputs'].get('h_val'),
+                'sigma_multiplier': res['inputs'].get('sigma_multiplier', 3.0)
+            })
+﻿
     # Auto-fill defaults based on previous session
     defaults = {
-        'start_factor': 1.0,
-        'end_factor': 2.0,
-        'increments': 10,
+        'start_factor': -3.0,
+        'end_factor': 3.0,
+        'increments': 15,
         'mean': fp.get('params', {}).get('mean', 100) if fp else 100,
         'std': fp.get('params', {}).get('std', 1.0) if fp else 1.0,
-        'replications': min(fp.get('n_replications', 500), 500) # Cap at 500 to prevent timeouts
+        'replications': min(fp.get('n_replications', 500), 500)
     }
-
-
+﻿
     curve_image = None
-
-
+﻿
     if request.method == "POST":
-        # 2. Grab user inputs from the OC form
-        start_factor = float(request.form.get("start_factor", 1.0))
-        end_factor = float(request.form.get("end_factor", 2.0))
-        start_factor = 1 + (start_factor/100)
-        end_factor = 1 + (start_factor/100)
-        increments = int(request.form.get("increments", 10))
+        start_factor = float(request.form.get("start_factor", -3.0))
+        end_factor = float(request.form.get("end_factor", 3.0))
+        increments = int(request.form.get("increments", 15))
         mean = float(request.form.get("mean", 100))
         std = float(request.form.get("std", 1.0))
         replications = int(request.form.get("replications", 500))
-
-
-        # FORCE the selected methods to be the ones from the home page
-        selected_methods = auto_methods
-
-
-        # Create the exact factor increments (e.g., 1.0, 1.1, 1.2...)
+﻿
         factors = np.linspace(start_factor, end_factor, increments)
         
-        # 3. Define the universal environment 
         behavior = "stable"
         params = {"mean": mean, "std": std, "data_type": "continuous", "distribution_type": "normal"}
         n_baseline = fp.get('n_baseline', 50)
-        sigma_multiplier = fp.get('sigma_multiplier', 3.0)
-        max_days = n_baseline + 500 # Limit to 500 days for speed
-        lambda_val = fp.get('lambda_val', 0.2)
-        alpha_val = fp.get('alpha_val', 0.05)
-        k_val = fp.get('k_val', None)
-        h_val = fp.get('h_val', None)
-
-
+        max_days = n_baseline + 500
+﻿
         plt.figure(figsize=(10, 6))
         
-        # Consistent colors and markers for the graph
-        styles = {
-            'shewhart': {'color': '#3b82f6', 'marker': 'o', 'label': 'Shewhart'},
-            'ewma': {'color': '#10b981', 'marker': 's', 'label': 'EWMA'},
-            'mc-ewma': {'color': '#ef4444', 'marker': '^', 'label': 'MC-EWMA'},
-            'cusum': {'color': '#8b5cf6', 'marker': 'D', 'label': 'CUSUM'},
-            'farrington': {'color': '#f59e0b', 'marker': 'x', 'label': 'Farrington'},
-            'glm': {'color': '#06b6d4', 'marker': 'v', 'label': 'GLM'}
-        }
-
-
-        # 4. The Calculation Loop
-        for method in selected_methods:
+        # Dynamic color and marker palettes so lines look distinct
+        colors = ['#3b82f6', '#10b981', '#ef4444', '#8b5cf6', '#f59e0b', '#06b6d4', '#ec4899', '#14b8a6']
+        markers = ['o', 's', '^', 'D', 'x', 'v', 'p', '*']
+﻿
+        # Loop through every unique configuration the user generated
+        for idx, config in enumerate(unique_configs):
             arls = []
             for factor in factors:
-                arl = calculate_oc_arl(method, factor, params, behavior, n_baseline, replications, sigma_multiplier, max_days, lambda_val, alpha_val, k_val, h_val)
+                arl = calculate_oc_arl(
+                    config['method'], factor, params, behavior, n_baseline, replications, 
+                    config['sigma_multiplier'], max_days, config['lambda_val'], 
+                    config['alpha_val'], config['k_val'], config['h_val']
+                )
                 arls.append(arl)
             
-            style = styles.get(method, {'color': 'black', 'marker': 'o', 'label': method.upper()})
-            plt.plot(factors, arls, marker=style['marker'], color=style['color'], label=style['label'], linewidth=2, markersize=8, alpha=0.8)
-
-
-        # 5. Format and Save the Plot
+            c = colors[idx % len(colors)]
+            m = markers[idx % len(markers)]
+            # Use the exact chart title (e.g., 'EWMA Chart (λ = 0.2, 3.0σ)') for the legend
+            plt.plot(factors, arls, marker=m, color=c, label=config['title'], linewidth=2, markersize=8, alpha=0.8)
+﻿
         plt.title("Operating Characteristic (OC) Curve", fontsize=14, fontweight='bold')
-        plt.xlabel("Step Shift Factor", fontsize=12, fontweight='bold')
+        plt.xlabel("Step Shift (%)", fontsize=12, fontweight='bold')
         plt.ylabel("Average Run Length (ARL)", fontsize=12, fontweight='bold')
         plt.grid(True, linestyle='--', alpha=0.7)
         plt.legend(loc='upper right')
         plt.tight_layout()
-
-
+﻿
         buf = io.BytesIO()
         plt.savefig(buf, format="png", dpi=100)
         buf.seek(0)
         curve_image = base64.b64encode(buf.getvalue()).decode("utf-8")
         plt.close()
-
-
-        # Update defaults so form doesn't reset after submitting
+﻿
         defaults.update({'start_factor': start_factor, 'end_factor': end_factor, 'increments': increments, 'mean': mean, 'std': std, 'replications': replications})
-
-
-    return render_template("operating_curve.html", nav_bar=nav_bar, defaults=defaults, curve_image=curve_image, auto_methods=auto_methods)
-
-
+﻿
+    return render_template("operating_curve.html", nav_bar=nav_bar, defaults=defaults, curve_image=curve_image, unique_configs=unique_configs)
+﻿
 if __name__ == "__main__":
-    app.run(debug=True)
-
-
-if __name__ == "__main__":
+    print("about to run created")
     app.run(debug=True)
 
