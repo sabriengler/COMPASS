@@ -752,7 +752,7 @@ def index():
         else:
             change, change_day = None, None
 
-        max_days = change_day + 500 if change_day is not None else 10000
+        max_days = change_day + 500 if change_day is not None else 2000
         lambda_val = float(fd.get("lambda_val", "0.3")) if fd.get("lambda_val") else 0.3
         alpha_val = float(fd.get("alpha_val", "0.05")) if fd.get("alpha_val") else 0.05
         k_val = float(fd.get("k_val")) if fd.get("k_val") else None
