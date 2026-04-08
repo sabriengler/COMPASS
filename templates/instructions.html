@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>COMPASS | Instructions</title>
-    <script src="https://cdn.tailwindcss.com">﻿</script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
@@ -12,7 +12,8 @@
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans">
-﻿
+
+
     <nav class="bg-white shadow-sm sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
@@ -31,12 +32,13 @@
             </div>
         </div>
     </nav>
-﻿
+
+
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 mt-10">
         <div class="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-100">
             <div class="px-6 py-8 border-b border-gray-200 bg-gradient-to-r from-blue-700 to-cyan-600">
                 <h1 class="text-3xl font-bold text-white">How to use this tool</h1>
-                <p class="mt-2 text-blue-50">A guide to using the detection method comparison tool.</p>
+                <p class="mt-2 text-blue-50">A guide to using COMPASS.</p>
             </div>
             
             <div class="p-8 space-y-10">
@@ -57,9 +59,11 @@
                         </ul>
                     </div>
                 </section>
-﻿
+
+
                 <hr class="border-gray-100">
-﻿
+
+
                 <section>
                     <h2 class="text-xl font-bold text-blue-700 mb-3">2. Define Behavior (Simulation Only)</h2>
                     <div class="text-gray-600 space-y-2">
@@ -71,9 +75,11 @@
                         </ul>
                     </div>
                 </section>
-﻿
+
+
                 <hr class="border-gray-100">
-﻿
+
+
                 <section>
                     <h2 class="text-xl font-bold text-blue-700 mb-3">3. Induce Changes</h2>
                     <div class="text-gray-600 space-y-2">
@@ -86,50 +92,67 @@
                         </ul>
                     </div>
                 </section>
-﻿
+
+
                 <hr class="border-gray-100">
-﻿
+
+
                 <section>
                     <h2 class="text-xl font-bold text-blue-700 mb-3">4. Analysis Methods</h2>
                     <div class="text-gray-600 space-y-2">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                             <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
                                 <strong class="text-gray-900 block mb-1">Shewhart</strong>
-                                <span class="text-sm">Standard 3-sigma limits. Best for large, sudden spikes.</span>
+                                <span class="text-sm">Standard control limits. Highly effective for detecting large, sudden shifts in process behavior.</span>
                             </div>
                             <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
                                 <strong class="text-gray-900 block mb-1">EWMA</strong>
-                                <span class="text-sm">Exponentially Weighted Moving Average. Best for small, subtle shifts.</span>
+                                <span class="text-sm">Exponentially Weighted Moving Average. Ideal for detecting small, subtle shifts.</span>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <strong class="text-gray-900 block mb-1">MC-EWMA</strong>
+                                <span class="text-sm">Markov Chain EWMA. An advanced variation that models state transitions for enhanced sensitivity.</span>
                             </div>
                             <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
                                 <strong class="text-gray-900 block mb-1">CUSUM</strong>
-                                <span class="text-sm">Cumulative Sum. Extremely sensitive to small deviations from target.</span>
+                                <span class="text-sm">Cumulative Sum. Extremely sensitive to small, sustained deviations by accumulating errors over time.</span>
                             </div>
                             <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                                <strong class="text-gray-900 block mb-1">Farrington / GLM</strong>
-                                <span class="text-sm">Advanced algorithms for surveillance data.</span>
+                                <strong class="text-gray-900 block mb-1">GLM</strong>
+                                <span class="text-sm">Generalized Linear Model. A powerful statistical approach that factors in historical baselines and underlying trends.</span>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <strong class="text-gray-900 block mb-1">Farrington</strong>
+                                <span class="text-sm">A specialized surveillance algorithm designed specifically for discrete count data.</span>
                             </div>
                         </div>
                     </div>
                 </section>
-﻿
+
+
                 <hr class="border-gray-100">
-﻿
+
+
                 <section>
-                    <h2 class="text-xl font-bold text-blue-700 mb-3">5. Compare & Finalize</h2>
+                    <h2 class="text-xl font-bold text-blue-700 mb-3">5. Compare & Finalize (Operating Curve)</h2>
                     <div class="text-gray-600 space-y-2">
-                        <ul class="list-disc pl-5 space-y-1 mt-2">
-                            <li><strong class="text-gray-900">Reanalyze:</strong> After a run, click "Reanalyze" in the top menu to test a different method (e.g. switching from Shewhart to CUSUM) on the <em>exact same dataset</em>.</li>
-                            <li><strong class="text-gray-900">Finalize & Rank:</strong> Click the "Finalize" button to generate a performance table. This ranks your runs by <strong>Average Run Length (ARL)</strong>—a lower ARL means the method detected the outbreak faster.</li>
+                        <ul class="list-disc pl-5 space-y-3 mt-2">
+                            <li><strong class="text-gray-900">Reanalyze:</strong> After a run, click "Reanalyze" in the top menu to test a different method (e.g. switching from Shewhart to CUSUM) or parameter (e.g. changing λ from 0.2 to 0.4) on the <em>exact same dataset</em>.</li>
+                            <li>
+                                <strong class="text-gray-900">Finalize & Compare (Operating Curve):</strong> Once you have generated multiple runs in your history, click the "Finalize & Compare" button. This takes you to the Operating Curve page.
+                                <p class="mt-1 text-sm">The Operating Curve runs a massive simulation to plot the <strong>Average Run Length (ARL)</strong> of your methods against various shift percentages. This creates a master graph allowing you to visually identify which algorithm and parameter configuration is most sensitive at specific anomaly sizes. </p>
+                            </li>
                         </ul>
                     </div>
                 </section>
-﻿
+
+
             </div>
         </div>
     </div>
 </body>
 </html>
+
 
 
 
